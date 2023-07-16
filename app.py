@@ -3,9 +3,34 @@ from ngram import NGram
 import numpy
 from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 from Sastrawi.StopWordRemover.StopWordRemoverFactory import StopWordRemoverFactory
+from flask import Flask, request
+import time
+from dotenv import load_dotenv
+import os
 
-api = '1572673613:AAH_fxioJgJo-lVMl_0VVwAYzX5zCckwaAs'
-bot = telebot.TeleBot(api)
+load_dotenv()
+
+
+def configure_routes(app, bot):
+    @app.route("/")
+    def index():
+        bot.remove_webhook()
+        time.sleep(1)
+        bot.set_webhook(url=os.getenv("WEBHOOK"))
+        return "ok", 200
+
+    @app.route('/webhook', methods=['POST'])
+    def webhook():
+        update = telebot.types.Update.de_json(
+            request.stream.read().decode("utf-8"))
+        bot.process_new_updates([update])
+        return "ok", 200
+
+
+bot = telebot.TeleBot(os.getenv("TOKEN"), threaded=False)
+app = Flask(__name__)
+configure_routes(app, bot)
+
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
@@ -14,44 +39,50 @@ def send_welcome(message):
 
 @bot.message_handler(commands=['diagnosa'])
 def send_welcome(message):
-    if len(message.text) > 10:
-        jenis = proses(message.text)
-        # print(jenis == None)
-        if(jenis!=None).any():
-            # print(jenis.size)
-            # bot.reply_to(message, jenis.size)
-            if jenis != '0':
-                ukuran_diagnosa = jenis.size
-                # print(ukuran_diagnosa)
-                if ukuran_diagnosa > 1:
+    try:
+        if len(message.text) > 10:
+            jenis = proses(message.text)
+            # print(jenis == None)
+            if (jenis != None).any():
+                # print(jenis.size)
+                # bot.reply_to(message, jenis.size)
+                if jenis != '0':
+                    ukuran_diagnosa = jenis.size
                     # print(ukuran_diagnosa)
-                    message.text = "Terdapat " + str(
-                        ukuran_diagnosa) + " jenis penyakit yang mungkin menyerang kucing anda"
-                    bot.reply_to(message, message.text)
-                    for i in range(ukuran_diagnosa):
-                        hasil = str(i + 1) + ". Penyakit " + str(diagnosa(jenis[0][i]))
-                        bot.reply_to(message, hasil)
+                    if ukuran_diagnosa > 1:
+                        # print(ukuran_diagnosa)
+                        message.text = "Terdapat " + str(
+                            ukuran_diagnosa) + " jenis penyakit yang mungkin menyerang kucing anda"
+                        bot.reply_to(message, message.text)
+                        for i in range(ukuran_diagnosa):
+                            hasil = str(i + 1) + ". Penyakit " + \
+                                str(diagnosa(jenis[0][i]))
+                            bot.reply_to(message, hasil)
 
+                    else:
+                        hasil = "Kemungkinan kucing anda menderita penyakit " + \
+                            str(diagnosa(jenis[0][0]))
+                        bot.reply_to(message, hasil)
+                        desc = deskripsi_penyakit(jenis)
+                        for i in range(desc.__len__()):
+                            message.text = desc[i][0]
+                            bot.reply_to(message, message.text)
 
                 else:
-                    hasil = "Kemungkinan kucing anda menderita penyakit " + str(diagnosa(jenis[0][0]))
-                    bot.reply_to(message, hasil)
-                    desc = deskripsi_penyakit(jenis)
-                    for i in range(desc.__len__()):
-                        message.text = desc[i][0]
-                        bot.reply_to(message, message.text)
-
+                    message_res = "Diagnosa penyakit belum ditemukan, silahkan masukkan lebih banyak gejala yang terjadi pada anjing anda"
+                    bot.reply_to(message, message_res)
             else:
-                message_res = "Diagnosa penyakit belum ditemukan, silahkan masukkan lebih banyak gejala yang terjadi pada anjing anda"
-                bot.reply_to(message, message_res)
+                bot.reply_to(
+                    message, 'Gejala tidak ditemukan. Silakan kirimkan gejala!')
         else:
-            bot.reply_to(message, 'Gejala tidak ditemukan. Silakan kirimkan gejala!')
-    else:
-        bot.reply_to(message, 'Silakan kirimkan gejala!')
+            bot.reply_to(message, 'Silakan kirimkan gejala!')
+    except Exception as e:
+        bot.reply_to(message, 'Maaf, terjadi kesalahan. Silakan coba lagi!')
+
 
 def deskripsi_penyakit(jenis):
     deskripsi = ""
-    if(jenis==0):
+    if (jenis == 0):
         deskripsi = (["Bartonellosis atau yang lebih dikenal dengan cat scratch disease adalah infeksi yang disebabkan oleh cakaran kucing yang terinfeksi bakteri Bartonella henselae. \n"
                       "Bakteri ini merupakan salah satu jenis bakteri paling umum di dunia, yang kerap ditemukan di mulut atau cakar kucing."],
                      ["Penanganan: \n"
@@ -111,21 +142,21 @@ def deskripsi_penyakit(jenis):
                      ["Pencegahan: \n"
                       "Pemberian pakan khusus yang rendah mg, tinggi Na atau pakan yang mempunyai PH cukup rendah. Diupayakan agar kucing diberikan pakan yang basah, penyediaan air segar sebagai sumber air minum yang cukupHindari kucing dari obesitas, Bersihkan kandangnya secara rutin."])
     elif (jenis == 7):
-        deskripsi =  (["Hepatitis pada kucing adalah salah satu penyakit yang menyerang organ hati atau liver. \n"
-                       "Penyakit ini merupakan salah satu yang cukup mematikan jika dibiarkan tanpa penanganan yang tepat. \n"
-                       "Penyebab kucing terkena hepatitis bisa beragam. \n"
-                       "Salah satunya adalah tertular dari kucing lain yang menderita hepatitis melalui darah atau feses."],
-                      ["Penanganan: \n"
-                       "Memberi antibiotik dan steroid untuk membunuh bakteri, Melakukan kemoterapi dan pembedahan radiasi yang berguna untuk mengecilkan dan membunuh sel kanker, Melakukan transfusi darah."],
-                      ["Pencegahan: \n"
-                       "Menjaga agar berat badan kucing tetap stabil dan mengatur kolesterol dalam batas yang disarankan, Menjaga kebersihan kucing dan lingkungan nya, Rutin memandikan dan membersihkan daerah kuku, telinga dan mata kucing, Mencuci tempat pakan dan kandang secara rutin, Hindarkan kucing bergaul dengan kucing liar."])
+        deskripsi = (["Hepatitis pada kucing adalah salah satu penyakit yang menyerang organ hati atau liver. \n"
+                      "Penyakit ini merupakan salah satu yang cukup mematikan jika dibiarkan tanpa penanganan yang tepat. \n"
+                      "Penyebab kucing terkena hepatitis bisa beragam. \n"
+                      "Salah satunya adalah tertular dari kucing lain yang menderita hepatitis melalui darah atau feses."],
+                     ["Penanganan: \n"
+                      "Memberi antibiotik dan steroid untuk membunuh bakteri, Melakukan kemoterapi dan pembedahan radiasi yang berguna untuk mengecilkan dan membunuh sel kanker, Melakukan transfusi darah."],
+                     ["Pencegahan: \n"
+                      "Menjaga agar berat badan kucing tetap stabil dan mengatur kolesterol dalam batas yang disarankan, Menjaga kebersihan kucing dan lingkungan nya, Rutin memandikan dan membersihkan daerah kuku, telinga dan mata kucing, Mencuci tempat pakan dan kandang secara rutin, Hindarkan kucing bergaul dengan kucing liar."])
     elif (jenis == 8):
         deskripsi = (["Otitis (radang pada telinga)  pada telinga kucing. \n"
                       "Penyakit yang sering terjadi pada kucing selain jamur adalah radang telinga atau otitis. \n"
                       "Otitis adalah sakit atau peradangan pada saluran pendengaran, yang ditandai dengan nyeri, demam, hilangnya pendengaran, tinitus dan vertigo. \n"
                       "Otitis sendiri dibagi menjadi 3 jenis berdasarkan tempat terjadinya peradangan, yaitu: otitis eksterna, otitis media dan otitis interna Otitis pada telinga luar sering terjadi karena telinga bagian luar lebih sering kontak dengan benda asing, bakteri, jamur, ear mites dan air yang kotor."],
-                      ["Penanganan: \n"
-                       "Memberikan obat antiradang dan antibiotik pada kucing, Memberikan obat yang mengandung anti ektoparasit."],
+                     ["Penanganan: \n"
+                      "Memberikan obat antiradang dan antibiotik pada kucing, Memberikan obat yang mengandung anti ektoparasit."],
                      ["Pencegahan: \n"
                       "Memberikan hipoalergenik untuk membantu kucing yang alergi terhadap makanan, Sering memeriksa kondisi kesehatan telinga kucing, Melakukan grooming secara teratur, Harus selalu memperhatikan kebersihan tubuh kucing terutama pada bagian kepala dan telinga kucing"])
     elif (jenis == 9):
@@ -158,12 +189,15 @@ def deskripsi_penyakit(jenis):
                       "Jangan terlalu sering dimandikan, Sisir dengan sisir bergerigi halus, Bersihkan kandang, Hindari kucing dari cuaca ekstrim, Hindari kucing dehidrasi, Lakukan Desinfektan rutin, Suntik anti scabies."])
     return deskripsi
 
+
 def diagnosa(jenis):
     penyakit_asli = (
-    ['Bordetollosis'], ['Cacingan'], ['Calici Virus'],
-    ['Ear Mites'], ['Feline Panleukopenia'], ['Feline Viral Rhinotracheitis'], ['FLUDT'],
-    ['Hepatitis'], ['Jamur'], ['Pyometra'], ['Rabies'], ['Scabies'])
+        ['Bordetollosis'], ['Cacingan'], ['Calici Virus'],
+        ['Ear Mites'], ['Feline Panleukopenia'], [
+            'Feline Viral Rhinotracheitis'], ['FLUDT'],
+        ['Hepatitis'], ['Jamur'], ['Pyometra'], ['Rabies'], ['Scabies'])
     return penyakit_asli[jenis][0]
+
 
 def proses(pesan):
     # create stemmer
@@ -180,7 +214,8 @@ def proses(pesan):
     pesan = str(pesan)
     pesan = stemmer.stem(pesan)
 
-    penyakit = (['demam'], ['tidak nafsu makan'], ['lesu'], ['bersin'], ['ingus meler'], ['mata rusak'], ['gangguan pernafasan'], ['diare'], ['bulu rontok'], ['warna gusi abnormal'], ['sariawan'], ['cacing kotoran'], ['gatal'], ['gangguan telinga'], ['muntah'], ['dehidrasi'], ['batuk'], ['air liur'], ['perut besar'], ['kurus'], ['gelisah'], ['gangguan air kecil'], ['sering minum'], ['kehausan'], ['kerak'], ['bentol merah'], ['cairan bau'], ['agresif'], ['suka menggigit'], ['takut cahaya dan air'], ['pilek'], ['darah dalam urine'], ['pendarahan'], ['luka berkusta'], ['panas'])
+    penyakit = (['demam'], ['tidak nafsu makan'], ['lesu'], ['bersin'], ['ingus meler'], ['mata rusak'], ['gangguan pernafasan'], ['diare'], ['bulu rontok'], ['warna gusi abnormal'], ['sariawan'], ['cacing kotoran'], ['gatal'], ['gangguan telinga'], ['muntah'], ['dehidrasi'], ['batuk'], [
+                'air liur'], ['perut besar'], ['kurus'], ['gelisah'], ['gangguan air kecil'], ['sering minum'], ['kehausan'], ['kerak'], ['bentol merah'], ['cairan bau'], ['agresif'], ['suka menggigit'], ['takut cahaya dan air'], ['pilek'], ['darah dalam urine'], ['pendarahan'], ['luka berkusta'], ['panas'])
 
     pesan_array = pesan.split()
 
@@ -204,36 +239,47 @@ def proses(pesan):
                 return 0
 
             latih = (
-            [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-            [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-            [1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1])
+                [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0,
+                    0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                    1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+                [1, 1, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0,
+                    0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+                    1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+                    0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0],
+                [0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1])
             hasil2 = []
             for t in range(latih.__len__()):
                 a = ((uji[0] - latih[t][0]) ** 2) + ((uji[1] - latih[t][1]) ** 2) + ((uji[2] - latih[t][2]) ** 2) + (
-                        (uji[3] - latih[t][3]) ** 2) + ((uji[4] - latih[t][4]) ** 2) + (
-                            (uji[5] - latih[t][5]) ** 2) + ((uji[6] - latih[t][6]) ** 2) + (
-                            (uji[7] - latih[t][7]) ** 2) + ((uji[8] - latih[t][8]) ** 2) + (
-                            (uji[9] - latih[t][9]) ** 2) + ((uji[10] - latih[t][10]) ** 2) + (
-                            (uji[11] - latih[t][11]) ** 2) + ((uji[12] - latih[t][12]) ** 2) + (
-                            (uji[13] - latih[t][13]) ** 2) + ((uji[14] - latih[t][14]) ** 2) + (
-                            (uji[15] - latih[t][15]) ** 2) + ((uji[16] - latih[t][16]) ** 2) + (
-                            (uji[17] - latih[t][17]) ** 2) + ((uji[18] - latih[t][18]) ** 2) + (
-                            (uji[19] - latih[t][19]) ** 2) + ((uji[20] - latih[t][20]) ** 2) + (
-                            (uji[21] - latih[t][21]) ** 2) + ((uji[22] - latih[t][22]) ** 2) + (
-                            (uji[23] - latih[t][23]) ** 2) + ((uji[24] - latih[t][24]) ** 2) + (
-                            (uji[25] - latih[t][25]) ** 2) + ((uji[26] - latih[t][26]) ** 2) + (
-                            (uji[27] - latih[t][27]) ** 2) + ((uji[28] - latih[t][28]) ** 2) + (
-                            (uji[29] - latih[t][29]) ** 2) + ((uji[30] - latih[t][30]) ** 2) + (
-                            (uji[31] - latih[t][31]) ** 2)
+                    (uji[3] - latih[t][3]) ** 2) + ((uji[4] - latih[t][4]) ** 2) + (
+                    (uji[5] - latih[t][5]) ** 2) + ((uji[6] - latih[t][6]) ** 2) + (
+                    (uji[7] - latih[t][7]) ** 2) + ((uji[8] - latih[t][8]) ** 2) + (
+                    (uji[9] - latih[t][9]) ** 2) + ((uji[10] - latih[t][10]) ** 2) + (
+                    (uji[11] - latih[t][11]) ** 2) + ((uji[12] - latih[t][12]) ** 2) + (
+                    (uji[13] - latih[t][13]) ** 2) + ((uji[14] - latih[t][14]) ** 2) + (
+                    (uji[15] - latih[t][15]) ** 2) + ((uji[16] - latih[t][16]) ** 2) + (
+                    (uji[17] - latih[t][17]) ** 2) + ((uji[18] - latih[t][18]) ** 2) + (
+                    (uji[19] - latih[t][19]) ** 2) + ((uji[20] - latih[t][20]) ** 2) + (
+                    (uji[21] - latih[t][21]) ** 2) + ((uji[22] - latih[t][22]) ** 2) + (
+                    (uji[23] - latih[t][23]) ** 2) + ((uji[24] - latih[t][24]) ** 2) + (
+                    (uji[25] - latih[t][25]) ** 2) + ((uji[26] - latih[t][26]) ** 2) + (
+                    (uji[27] - latih[t][27]) ** 2) + ((uji[28] - latih[t][28]) ** 2) + (
+                    (uji[29] - latih[t][29]) ** 2) + ((uji[30] - latih[t][30]) ** 2) + (
+                    (uji[31] - latih[t][31]) ** 2)
 
                 hasil2.append(a)
             hasil2 = numpy.array(hasil2)
@@ -242,7 +288,3 @@ def proses(pesan):
         else:
             print(penyakit)
             print('gejala tidak ada')
-
-
-print('running...')
-bot.polling()
